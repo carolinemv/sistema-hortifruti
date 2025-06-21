@@ -291,7 +291,7 @@ const Products: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700">Fornecedor</label>
                 <select
                   name="supplier_id"
-                  defaultValue={editingProduct?.supplier_id}
+                  defaultValue={editingProduct?.supplier.id}
                   required
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                 >
