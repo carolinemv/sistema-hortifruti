@@ -2,6 +2,11 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boo
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
+import enum
+
+class UserRole(str, enum.Enum):
+    admin = "admin"
+    vendedor = "vendedor"
 
 class User(Base):
     __tablename__ = "users"
@@ -11,10 +16,13 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     full_name = Column(String)
+    role = Column(String, default="vendedor")
     is_active = Column(Boolean, default=True)
-    is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    sales = relationship("Sale", back_populates="seller")
+    stock_movements = relationship("StockMovement", back_populates="user")
 
 class Supplier(Base):
     __tablename__ = "suppliers"
@@ -65,20 +73,21 @@ class Product(Base):
     
     supplier = relationship("Supplier", back_populates="products")
     sale_items = relationship("SaleItem", back_populates="product")
+    stock_movements = relationship("StockMovement", back_populates="product")
 
 class Sale(Base):
     __tablename__ = "sales"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    seller_id = Column(Integer, ForeignKey("users.id"))
     total_amount = Column(Float)
     payment_method = Column(String)  # dinheiro, cartão, pix, etc.
     status = Column(String, default="completed")  # completed, cancelled, pending
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     customer = relationship("Customer", back_populates="sales")
-    user = relationship("User")
+    seller = relationship("User", back_populates="sales")
     items = relationship("SaleItem", back_populates="sale")
 
 class SaleItem(Base):
@@ -105,5 +114,5 @@ class StockMovement(Base):
     reason = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
-    product = relationship("Product")
-    user = relationship("User") 
+    product = relationship("Product", back_populates="stock_movements")
+    user = relationship("User", back_populates="stock_movements") 

@@ -6,7 +6,11 @@ from ..models import Sale, SaleItem, Product, Customer, User
 from ..schemas import SaleCreate, SaleUpdate, Sale as SaleSchema
 from ..auth import get_current_active_user
 
-router = APIRouter(prefix="/sales", tags=["sales"])
+router = APIRouter(
+    prefix="/sales",
+    tags=["sales"],
+    dependencies=[Depends(get_current_active_user)], # Todos os usuários ativos podem acessar
+)
 
 @router.get("/", response_model=List[SaleSchema])
 async def get_sales(
@@ -15,7 +19,10 @@ async def get_sales(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    sales = db.query(Sale).offset(skip).limit(limit).all()
+    if current_user.role == "admin":
+        sales = db.query(Sale).offset(skip).limit(limit).all()
+    else: # Vendedor
+        sales = db.query(Sale).filter(Sale.seller_id == current_user.id).offset(skip).limit(limit).all()
     return sales
 
 @router.get("/{sale_id}", response_model=SaleSchema)
@@ -24,56 +31,52 @@ async def get_sale(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
-    if sale is None:
+    db_sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    if db_sale is None:
         raise HTTPException(status_code=404, detail="Sale not found")
-    return sale
+    
+    if current_user.role != "admin" and db_sale.seller_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this sale")
+        
+    return db_sale
 
-@router.post("/", response_model=SaleSchema)
+@router.post("/", response_model=SaleSchema, status_code=201)
 async def create_sale(
     sale: SaleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Verify customer exists
-    customer = db.query(Customer).filter(Customer.id == sale.customer_id).first()
-    if customer is None:
-        raise HTTPException(status_code=404, detail="Customer not found")
+    total_amount = 0
+    sale_items_to_create = []
     
-    # Create sale
-    db_sale = Sale(
-        customer_id=sale.customer_id,
-        user_id=current_user.id,
-        total_amount=sale.total_amount,
-        payment_method=sale.payment_method,
-        status=sale.status
-    )
-    db.add(db_sale)
-    db.flush()  # Get the sale ID
-    
-    # Create sale items and update stock
     for item in sale.items:
-        # Verify product exists and has enough stock
         product = db.query(Product).filter(Product.id == item.product_id).first()
-        if product is None:
-            raise HTTPException(status_code=404, detail=f"Product {item.product_id} not found")
-        
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product with id {item.product_id} not found")
         if product.stock_quantity < item.quantity:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for product {product.name}")
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for {product.name}")
         
-        # Create sale item
-        db_item = SaleItem(
-            sale_id=db_sale.id,
+        item_total = product.price * item.quantity
+        total_amount += item_total
+        
+        sale_items_to_create.append(SaleItem(
             product_id=item.product_id,
             quantity=item.quantity,
-            unit_price=item.unit_price,
-            total_price=item.total_price
-        )
-        db.add(db_item)
+            unit_price=product.price,
+            total_price=item_total
+        ))
         
-        # Update product stock
         product.stock_quantity -= item.quantity
+
+    db_sale = Sale(
+        seller_id=current_user.id,
+        customer_id=sale.customer_id,
+        payment_method=sale.payment_method,
+        total_amount=total_amount,
+        items=sale_items_to_create
+    )
     
+    db.add(db_sale)
     db.commit()
     db.refresh(db_sale)
     return db_sale

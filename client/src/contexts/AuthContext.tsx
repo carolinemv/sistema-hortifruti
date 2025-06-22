@@ -7,6 +7,7 @@ interface User {
   email: string;
   full_name: string;
   is_admin: boolean;
+  role: string;
 }
 
 interface AuthContextData {
@@ -14,6 +15,7 @@ interface AuthContextData {
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
@@ -28,13 +30,15 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
       api.defaults.headers.authorization = `Bearer ${token}`;
       loadUser();
+    } else {
+      setLoading(false);
     }
   }, []);
 
@@ -42,10 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.get('/auth/me');
       setUser(response.data);
-      setIsAuthenticated(true);
     } catch (error) {
       localStorage.removeItem('token');
       delete api.defaults.headers.authorization;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,12 +80,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('token');
     delete api.defaults.headers.authorization;
     setUser(null);
-    setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, logout }}>
-      {children}
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, loading }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }; 

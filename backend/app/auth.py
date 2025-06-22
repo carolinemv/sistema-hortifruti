@@ -9,9 +9,10 @@ from .database import get_db
 from .models import User
 from .schemas import TokenData
 from .config import settings
+import secrets
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -25,6 +26,8 @@ def authenticate_user(db: Session, username: str, password: str):
         return False
     if not verify_password(password, user.hashed_password):
         return False
+    if not user.is_active:
+        return False
     return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -32,10 +35,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
+
+def create_password_reset_token(email: str):
+    expire = timedelta(minutes=settings.access_token_expire_minutes)
+    return create_access_token(data={"sub": email}, expires_delta=expire)
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    try:
+        decoded_token = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        return decoded_token.get("sub")
+    except JWTError:
+        return None
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -45,7 +60,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        username: str = payload.get("sub")
+        username: Optional[str] = payload.get("sub")
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
@@ -62,9 +77,9 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 async def get_current_admin_user(current_user: User = Depends(get_current_active_user)):
-    if not current_user.is_admin:
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            detail="The user doesn't have enough privileges"
         )
     return current_user 

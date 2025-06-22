@@ -4,17 +4,20 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Supplier
 from ..schemas import SupplierCreate, SupplierUpdate, Supplier as SupplierSchema
-from ..auth import get_current_active_user, get_current_admin_user
-from ..models import User
+from ..auth import get_current_admin_user
 
-router = APIRouter(prefix="/suppliers", tags=["suppliers"])
+router = APIRouter(
+    prefix="/suppliers",
+    tags=["suppliers"],
+    dependencies=[Depends(get_current_admin_user)],
+    responses={403: {"description": "Operation not permitted"}},
+)
 
 @router.get("/", response_model=List[SupplierSchema])
 async def get_suppliers(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    db: Session = Depends(get_db)
 ):
     suppliers = db.query(Supplier).filter(Supplier.is_active == True).offset(skip).limit(limit).all()
     return suppliers
@@ -22,19 +25,17 @@ async def get_suppliers(
 @router.get("/{supplier_id}", response_model=SupplierSchema)
 async def get_supplier(
     supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    db: Session = Depends(get_db)
 ):
     supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if supplier is None:
         raise HTTPException(status_code=404, detail="Supplier not found")
     return supplier
 
-@router.post("/", response_model=SupplierSchema)
+@router.post("/", response_model=SupplierSchema, status_code=201)
 async def create_supplier(
     supplier: SupplierCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     # Check if CNPJ already exists
     db_supplier = db.query(Supplier).filter(Supplier.cnpj == supplier.cnpj).first()
@@ -51,25 +52,24 @@ async def create_supplier(
 async def update_supplier(
     supplier_id: int,
     supplier: SupplierUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if db_supplier is None:
         raise HTTPException(status_code=404, detail="Supplier not found")
     
-    for field, value in supplier.dict(exclude_unset=True).items():
-        setattr(db_supplier, field, value)
+    update_data = supplier.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_supplier, key, value)
     
     db.commit()
     db.refresh(db_supplier)
     return db_supplier
 
-@router.delete("/{supplier_id}")
+@router.delete("/{supplier_id}", status_code=204)
 async def delete_supplier(
     supplier_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    db: Session = Depends(get_db)
 ):
     db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
     if db_supplier is None:
@@ -77,4 +77,4 @@ async def delete_supplier(
     
     db_supplier.is_active = False
     db.commit()
-    return {"message": "Supplier deleted successfully"} 
+    return 

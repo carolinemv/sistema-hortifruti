@@ -13,10 +13,20 @@ import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return <div>Carregando...</div>; // Ou um spinner
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-}
+};
+
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return <div>Carregando...</div>;
+  if (user?.role !== 'admin') {
+    return <Navigate to="/pdv" />; // Redireciona vendedores para o PDV
+  }
+  return <>{children}</>;
+};
 
 function App() {
   return (
@@ -34,12 +44,13 @@ function App() {
                   </PrivateRoute>
                 }
               >
-                <Route index element={<Dashboard />} />
-                <Route path="products" element={<Products />} />
-                <Route path="customers" element={<Customers />} />
-                <Route path="suppliers" element={<Suppliers />} />
-                <Route path="sales" element={<Sales />} />
+                <Route index element={<Navigate to="/pdv" />} />
+                <Route path="dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+                <Route path="products" element={<AdminRoute><Products /></AdminRoute>} />
+                <Route path="suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
                 <Route path="pdv" element={<PDV />} />
+                <Route path="customers" element={<Customers />} />
+                <Route path="sales" element={<Sales />} />
               </Route>
             </Routes>
           </div>

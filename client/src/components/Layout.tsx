@@ -8,21 +8,29 @@ import {
   Truck, 
   ShoppingCart, 
   CreditCard,
-  LogOut 
+  LogOut,
+  BarChart
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'PDV', href: '/pdv', icon: CreditCard },
-    { name: 'Produtos', href: '/products', icon: Package },
-    { name: 'Clientes', href: '/customers', icon: Users },
-    { name: 'Fornecedores', href: '/suppliers', icon: Truck },
-    { name: 'Vendas', href: '/sales', icon: ShoppingCart },
+  const allNavigation = [
+    { name: 'Dashboard', href: '/', icon: Home, adminOnly: true },
+    { name: 'PDV', href: '/pdv', icon: CreditCard, adminOnly: false },
+    { name: 'Produtos', href: '/products', icon: Package, adminOnly: true },
+    { name: 'Clientes', href: '/customers', icon: Users, adminOnly: false },
+    { name: 'Fornecedores', href: '/suppliers', icon: Truck, adminOnly: true },
+    { name: 'Vendas', href: '/sales', icon: ShoppingCart, adminOnly: false },
   ];
+  
+  const navigation = allNavigation.filter(item => {
+    if (user?.role === 'admin') {
+      return true; // Admin vê tudo
+    }
+    return !item.adminOnly; // Vendedor vê apenas o que não é exclusivo do admin
+  });
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -65,7 +73,7 @@ const Layout: React.FC = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-700">{user?.full_name}</p>
-                <p className="text-xs text-gray-500">{user?.is_admin ? 'Administrador' : 'Usuário'}</p>
+                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>
             <button

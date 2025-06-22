@@ -2,32 +2,6 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
 
-# User schemas
-class UserBase(BaseModel):
-    username: str
-    email: EmailStr
-    full_name: str
-    is_admin: bool = False
-
-class UserCreate(UserBase):
-    password: str
-
-class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = None
-    is_admin: Optional[bool] = None
-    is_active: Optional[bool] = None
-
-class User(UserBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
 # Auth schemas
 class Token(BaseModel):
     access_token: str
@@ -36,142 +10,156 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     username: Optional[str] = None
 
-# Supplier schemas
+# --- User Schemas ---
+class UserBase(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: Optional[str] = None
+
+class UserCreate(UserBase):
+    password: str
+    role: str = "vendedor"
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class User(UserBase):
+    id: int
+    role: str
+    is_active: bool
+    class Config:
+        from_attributes = True
+
+# --- Password Reset Schemas ---
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordReset(BaseModel):
+    token: str
+    new_password: str
+
+# --- Supplier Schemas ---
 class SupplierBase(BaseModel):
     name: str
     cnpj: str
     phone: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     address: Optional[str] = None
 
 class SupplierCreate(SupplierBase):
     pass
 
+class Supplier(SupplierBase):
+    id: int
+    is_active: bool
+    class Config:
+        from_attributes = True
+
 class SupplierUpdate(BaseModel):
     name: Optional[str] = None
     cnpj: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     address: Optional[str] = None
     is_active: Optional[bool] = None
 
-class Supplier(SupplierBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# Customer schemas
+# --- Customer Schemas ---
 class CustomerBase(BaseModel):
     name: str
     cpf: str
     phone: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     address: Optional[str] = None
 
 class CustomerCreate(CustomerBase):
     pass
 
+class Customer(CustomerBase):
+    id: int
+    is_active: bool
+    class Config:
+        from_attributes = True
+
 class CustomerUpdate(BaseModel):
     name: Optional[str] = None
     cpf: Optional[str] = None
     phone: Optional[str] = None
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     address: Optional[str] = None
     is_active: Optional[bool] = None
 
-class Customer(CustomerBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-# Product schemas
+# --- Product Schemas ---
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     price: float
-    cost_price: float
-    stock_quantity: int = 0
-    min_stock: int = 0
+    stock_quantity: float
     unit: str
-    category: str
     supplier_id: int
+    category: Optional[str] = None
 
 class ProductCreate(ProductBase):
-    pass
+    cost_price: float
+
+class Product(ProductBase):
+    id: int
+    cost_price: float
+    is_active: bool
+    supplier: Supplier
+    class Config:
+        from_attributes = True
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     price: Optional[float] = None
-    cost_price: Optional[float] = None
-    stock_quantity: Optional[int] = None
-    min_stock: Optional[int] = None
+    stock_quantity: Optional[float] = None
     unit: Optional[str] = None
     category: Optional[str] = None
     supplier_id: Optional[int] = None
     is_active: Optional[bool] = None
+    cost_price: Optional[float] = None
 
-class Product(ProductBase):
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    supplier: Supplier
-
-    class Config:
-        from_attributes = True
-
-# Sale schemas
+# --- Sale Schemas ---
 class SaleItemBase(BaseModel):
     product_id: int
     quantity: float
-    unit_price: float
-    total_price: float
 
 class SaleItemCreate(SaleItemBase):
     pass
 
 class SaleItem(SaleItemBase):
     id: int
-    sale_id: int
-    product: Product
-
+    unit_price: float
+    total_price: float
     class Config:
         from_attributes = True
 
 class SaleBase(BaseModel):
-    customer_id: int
     payment_method: str
-    status: str = "completed"
+    customer_id: Optional[int] = None
 
 class SaleCreate(SaleBase):
     items: List[SaleItemCreate]
+
+class Sale(SaleBase):
+    id: int
+    seller_id: int
     total_amount: float
+    created_at: datetime
+    items: List[SaleItem] = []
+    customer: Optional[Customer] = None
+    seller: User
+    class Config:
+        from_attributes = True
 
 class SaleUpdate(BaseModel):
     customer_id: Optional[int] = None
     payment_method: Optional[str] = None
     status: Optional[str] = None
-
-class Sale(SaleBase):
-    id: int
-    user_id: int
-    total_amount: float
-    created_at: datetime
-    customer: Customer
-    user: User
-    items: List[SaleItem]
-
-    class Config:
-        from_attributes = True
 
 # Stock Movement schemas
 class StockMovementBase(BaseModel):
@@ -187,8 +175,8 @@ class StockMovement(StockMovementBase):
     id: int
     user_id: int
     created_at: datetime
-    product: Product
-    user: User
+    product: "Product"
+    user: "User"
 
     class Config:
         from_attributes = True 
