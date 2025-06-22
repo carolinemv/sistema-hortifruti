@@ -1,10 +1,11 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, selectinload
 from ..database import get_db
-from ..models import Sale, SaleItem, Product, Customer, User
+from ..models import Sale, SaleItem, Product, Customer, User, AccountReceivable
 from ..schemas import SaleCreate, SaleUpdate, Sale as SaleSchema
 from ..auth import get_current_active_user
+from datetime import datetime, timedelta
 
 router = APIRouter(
     prefix="/sales",
@@ -16,6 +17,7 @@ router = APIRouter(
 async def get_sales(
     skip: int = 0,
     limit: int = 100,
+    customer_name: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -24,6 +26,9 @@ async def get_sales(
         joinedload(Sale.customer),
         joinedload(Sale.items).joinedload(SaleItem.product)
     )
+    
+    if customer_name:
+        query = query.join(Customer).filter(Customer.name.ilike(f"%{customer_name}%"))
     
     if current_user.role == "admin":
         sales = query.order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
@@ -89,6 +94,24 @@ async def create_sale(
     db.add(db_sale)
     db.commit()
     db.refresh(db_sale)
+    
+    # Se o pagamento for "fiado", criar uma conta a receber
+    if sale.payment_method.lower() in ["fiado", "credito", "a prazo"]:
+        # Definir data de vencimento padrão (30 dias)
+        due_date = datetime.now() + timedelta(days=30)
+        
+        account_receivable = AccountReceivable(
+            sale_id=db_sale.id,
+            customer_id=sale.customer_id,
+            amount=total_amount,
+            due_date=due_date,
+            notes=f"Fiado da venda #{db_sale.id}",
+            status="pending"
+        )
+        
+        db.add(account_receivable)
+        db.commit()
+    
     return db_sale
 
 @router.put("/{sale_id}", response_model=SaleSchema)

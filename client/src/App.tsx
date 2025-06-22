@@ -9,6 +9,10 @@ import Customers from './pages/Customers';
 import Suppliers from './pages/Suppliers';
 import Sales from './pages/Sales';
 import PDV from './pages/PDV';
+import AccountsReceivable from './pages/AccountsReceivable';
+import Users from './pages/Users';
+import Locations from './pages/Locations';
+import SupplierBoxes from './pages/SupplierBoxes';
 import Layout from './components/Layout';
 
 const queryClient = new QueryClient();
@@ -51,6 +55,10 @@ function App() {
                 <Route path="pdv" element={<PDV />} />
                 <Route path="customers" element={<Customers />} />
                 <Route path="sales" element={<Sales />} />
+                <Route path="accounts-receivable" element={<AccountsReceivable />} />
+                <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
+                <Route path="locations" element={<AdminRoute><Locations /></AdminRoute>} />
+                <Route path="supplier-boxes" element={<AdminRoute><SupplierBoxes /></AdminRoute>} />
               </Route>
             </Routes>
           </div>

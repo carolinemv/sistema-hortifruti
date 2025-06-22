@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from 'react-query';
 import { api } from '../services/api';
-import { ShoppingCart, Calendar, DollarSign } from 'lucide-react';
+import { ShoppingCart, Calendar, DollarSign, Search } from 'lucide-react';
 
 interface SaleItem {
   id: number;
@@ -35,10 +35,14 @@ interface Sale {
 }
 
 const Sales: React.FC = () => {
+  const [customerNameFilter, setCustomerNameFilter] = useState<string>('');
+
   const { data: sales, isLoading } = useQuery<Sale[]>(
-    'sales',
+    ['sales', customerNameFilter],
     async () => {
-      const response = await api.get('/sales');
+      const params: any = {};
+      if (customerNameFilter) params.customer_name = customerNameFilter;
+      const response = await api.get('/sales', { params });
       return response.data;
     }
   );
@@ -66,6 +70,23 @@ const Sales: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Histórico de Vendas</h1>
         <p className="text-gray-600">Visualize todas as vendas realizadas</p>
+      </div>
+
+      {/* Filter */}
+      <div className="bg-white rounded-lg shadow-md p-4">
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-gray-700">Nome do cliente:</label>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={customerNameFilter}
+              onChange={(e) => setCustomerNameFilter(e.target.value)}
+              placeholder="Digite o nome do cliente..."
+              className="w-full pl-10 border border-gray-300 rounded-md px-3 py-2"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Sales List */}

@@ -256,6 +256,7 @@ const PDV: React.FC = () => {
               <option value="cartao_credito">Cartão de Crédito</option>
               <option value="cartao_debito">Cartão de Débito</option>
               <option value="pix">PIX</option>
+              <option value="fiado">Fiado</option>
             </select>
           </div>
 

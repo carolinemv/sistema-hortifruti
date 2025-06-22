@@ -9,7 +9,9 @@ import {
   ShoppingCart, 
   CreditCard,
   LogOut,
-  BarChart
+  BarChart,
+  DollarSign,
+  Warehouse
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
@@ -23,6 +25,10 @@ const Layout: React.FC = () => {
     { name: 'Clientes', href: '/customers', icon: Users, adminOnly: false },
     { name: 'Fornecedores', href: '/suppliers', icon: Truck, adminOnly: true },
     { name: 'Vendas', href: '/sales', icon: ShoppingCart, adminOnly: false },
+    { name: 'Contas a Receber', href: '/accounts-receivable', icon: DollarSign, adminOnly: false },
+    { name: 'Funcionários', href: '/users', icon: Users, adminOnly: true },
+    { name: 'Estoque', href: '/locations', icon: Warehouse, adminOnly: true },
+    { name: 'Caixas', href: '/supplier-boxes', icon: Package, adminOnly: true },
   ];
   
   const navigation = allNavigation.filter(item => {
