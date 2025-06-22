@@ -104,6 +104,18 @@ const PDV: React.FC = () => {
     return cart.reduce((sum, item) => sum + item.total, 0);
   };
 
+  const handleCustomerChange = (customerId: string) => {
+    if (cart.length > 0) {
+      if (window.confirm('Trocar o cliente irá limpar o carrinho atual. Deseja continuar?')) {
+        setCart([]);
+      } else {
+        return; // Mantém o cliente atual se o usuário cancelar
+      }
+    }
+    const customer = customers?.find(c => c.id === parseInt(customerId));
+    setSelectedCustomer(customer || null);
+  };
+
   const handleCheckout = () => {
     if (!selectedCustomer) {
       alert('Selecione um cliente');
@@ -179,10 +191,7 @@ const PDV: React.FC = () => {
             </label>
             <select
               value={selectedCustomer?.id || ''}
-              onChange={(e) => {
-                const customer = customers?.find(c => c.id === parseInt(e.target.value));
-                setSelectedCustomer(customer || null);
-              }}
+              onChange={(e) => handleCustomerChange(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2"
             >
               <option value="">Selecione um cliente</option>
@@ -261,11 +270,11 @@ const PDV: React.FC = () => {
           {/* Checkout Button */}
           <button
             onClick={handleCheckout}
-            disabled={cart.length === 0 || !selectedCustomer}
-            className="w-full mt-4 bg-primary-600 text-white py-3 px-4 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            disabled={!selectedCustomer || cart.length === 0 || createSale.isLoading}
+            className="w-full flex items-center justify-center bg-primary-600 text-white font-bold py-3 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             <CreditCard className="h-5 w-5 mr-2" />
-            Finalizar Venda
+            {createSale.isLoading ? 'Finalizando...' : 'Finalizar Venda'}
           </button>
         </div>
       </div>

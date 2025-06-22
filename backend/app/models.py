@@ -79,7 +79,7 @@ class Sale(Base):
     __tablename__ = "sales"
     
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     seller_id = Column(Integer, ForeignKey("users.id"))
     total_amount = Column(Float)
     payment_method = Column(String)  # dinheiro, cartão, pix, etc.
@@ -115,4 +115,35 @@ class StockMovement(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     product = relationship("Product", back_populates="stock_movements")
-    user = relationship("User", back_populates="stock_movements") 
+    user = relationship("User", back_populates="stock_movements")
+
+class AccountReceivable(Base):
+    __tablename__ = "accounts_receivable"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    amount = Column(Float, nullable=False)  # Valor total da conta
+    paid_amount = Column(Float, default=0)  # Valor já pago
+    due_date = Column(DateTime(timezone=True), nullable=False)  # Data de vencimento
+    status = Column(String, default="pending")  # pending, partial, paid, overdue
+    notes = Column(Text)  # Observações sobre o fiado
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    sale = relationship("Sale")
+    customer = relationship("Customer")
+
+class Payment(Base):
+    __tablename__ = "payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    account_receivable_id = Column(Integer, ForeignKey("accounts_receivable.id"), nullable=False)
+    amount = Column(Float, nullable=False)  # Valor do pagamento
+    payment_method = Column(String)  # dinheiro, cartão, pix, etc.
+    payment_date = Column(DateTime(timezone=True), server_default=func.now())
+    notes = Column(Text)  # Observações sobre o pagamento
+    created_by = Column(Integer, ForeignKey("users.id"))
+    
+    account_receivable = relationship("AccountReceivable")
+    user = relationship("User") 

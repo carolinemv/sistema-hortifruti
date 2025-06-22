@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from ..database import get_db
 from ..models import Sale, SaleItem, Product, Customer, User
 from ..schemas import SaleCreate, SaleUpdate, Sale as SaleSchema
@@ -19,10 +19,16 @@ async def get_sales(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    query = db.query(Sale).options(
+        joinedload(Sale.seller), 
+        joinedload(Sale.customer),
+        joinedload(Sale.items).joinedload(SaleItem.product)
+    )
+    
     if current_user.role == "admin":
-        sales = db.query(Sale).offset(skip).limit(limit).all()
+        sales = query.order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
     else: # Vendedor
-        sales = db.query(Sale).filter(Sale.seller_id == current_user.id).offset(skip).limit(limit).all()
+        sales = query.filter(Sale.seller_id == current_user.id).order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
     return sales
 
 @router.get("/{sale_id}", response_model=SaleSchema)
@@ -31,7 +37,11 @@ async def get_sale(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    db_sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    db_sale = db.query(Sale).options(
+        joinedload(Sale.seller), 
+        joinedload(Sale.customer),
+        joinedload(Sale.items).joinedload(SaleItem.product)
+    ).filter(Sale.id == sale_id).first()
     if db_sale is None:
         raise HTTPException(status_code=404, detail="Sale not found")
     

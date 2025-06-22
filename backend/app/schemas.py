@@ -135,12 +135,13 @@ class SaleItem(SaleItemBase):
     id: int
     unit_price: float
     total_price: float
+    product: Product
     class Config:
         from_attributes = True
 
 class SaleBase(BaseModel):
     payment_method: str
-    customer_id: Optional[int] = None
+    customer_id: int
 
 class SaleCreate(SaleBase):
     items: List[SaleItemCreate]

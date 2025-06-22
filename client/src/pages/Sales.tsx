@@ -24,11 +24,14 @@ interface Sale {
   created_at: string;
   customer: {
     name: string;
-  };
+  } | null;
   user: {
     full_name: string;
   };
   items: SaleItem[];
+  seller: {
+    full_name: string;
+  };
 }
 
 const Sales: React.FC = () => {
@@ -77,7 +80,7 @@ const Sales: React.FC = () => {
                     Venda #{sale.id}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Cliente: {sale.customer.name}
+                    Cliente: {sale.customer?.name || 'Não informado'}
                   </p>
                 </div>
               </div>
@@ -98,7 +101,7 @@ const Sales: React.FC = () => {
               </div>
               <div className="text-sm">
                 <span className="text-gray-500">Vendedor:</span>
-                <span className="ml-1 font-medium">{sale.user.full_name}</span>
+                <span className="ml-1 font-medium">{sale.seller?.full_name || 'Não informado'}</span>
               </div>
               <div className="text-sm">
                 <span className="text-gray-500">Status:</span>
