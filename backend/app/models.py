@@ -86,6 +86,7 @@ class Sale(Base):
     payment_method = Column(String)  # dinheiro, cartão, pix, etc.
     status = Column(String, default="completed")  # completed, cancelled, pending
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    paid_at = Column(DateTime(timezone=True), nullable=True)  # Data de quitação
     
     customer = relationship("Customer", back_populates="sales")
     seller = relationship("User", back_populates="sales")
@@ -132,6 +133,7 @@ class AccountReceivable(Base):
     paid_amount = Column(Float, default=0)  # Valor já pago
     due_date = Column(DateTime(timezone=True), nullable=False)  # Data de vencimento
     status = Column(String, default="pending")  # pending, partial, paid, overdue
+    paid_at = Column(DateTime(timezone=True), nullable=True)  # Data de quitação completa
     notes = Column(Text)  # Observações sobre o fiado
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

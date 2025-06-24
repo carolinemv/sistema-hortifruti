@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
@@ -13,10 +13,16 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 async def get_customers(
     skip: int = 0,
     limit: int = 100,
+    name: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    customers = db.query(Customer).filter(Customer.is_active == True).offset(skip).limit(limit).all()
+    query = db.query(Customer).filter(Customer.is_active == True)
+    
+    if name:
+        query = query.filter(Customer.name.ilike(f"%{name}%"))
+    
+    customers = query.offset(skip).limit(limit).all()
     return customers
 
 @router.get("/{customer_id}", response_model=CustomerSchema)

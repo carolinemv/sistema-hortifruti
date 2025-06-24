@@ -18,6 +18,9 @@ async def get_sales(
     skip: int = 0,
     limit: int = 100,
     customer_name: Optional[str] = None,
+    seller_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -30,11 +33,150 @@ async def get_sales(
     if customer_name:
         query = query.join(Customer).filter(Customer.name.ilike(f"%{customer_name}%"))
     
+    if seller_id and current_user.role == "admin":
+        query = query.filter(Sale.seller_id == seller_id)
+    
+    if start_date:
+        query = query.filter(Sale.created_at >= start_date)
+    
+    if end_date:
+        query = query.filter(Sale.created_at <= end_date + " 23:59:59")
+    
     if current_user.role == "admin":
         sales = query.order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
     else: # Vendedor
         sales = query.filter(Sale.seller_id == current_user.id).order_by(Sale.created_at.desc()).offset(skip).limit(limit).all()
     return sales
+
+@router.get("/grouped-by-customer")
+async def get_sales_grouped_by_customer(
+    customer_name: Optional[str] = None,
+    seller_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Retorna vendas agrupadas por cliente com filtros"""
+    from sqlalchemy import func
+    
+    # Query base
+    query = db.query(
+        Customer.id,
+        Customer.name,
+        Customer.cpf,
+        func.count(Sale.id).label('sales_count'),
+        func.sum(Sale.total_amount).label('total_amount'),
+        func.avg(Sale.total_amount).label('avg_amount')
+    ).join(Sale, Customer.id == Sale.customer_id)
+    
+    # Aplicar filtros
+    if customer_name:
+        query = query.filter(Customer.name.ilike(f"%{customer_name}%"))
+    
+    # Filtro por vendedor - apenas admins podem filtrar por outros vendedores
+    if seller_id and current_user.role == "admin":
+        try:
+            seller_id_int = int(seller_id)
+            query = query.filter(Sale.seller_id == seller_id_int)
+        except ValueError:
+            pass  # Ignora se não for um número válido
+    elif current_user.role != "admin":
+        # Vendedores só veem suas próprias vendas
+        query = query.filter(Sale.seller_id == current_user.id)
+    
+    if start_date:
+        query = query.filter(Sale.created_at >= start_date)
+    
+    if end_date:
+        query = query.filter(Sale.created_at <= end_date + " 23:59:59")
+    
+    if status:
+        query = query.filter(Sale.status == status)
+    
+    # Agrupar e ordenar
+    grouped_sales = query.group_by(Customer.id, Customer.name, Customer.cpf)\
+        .order_by(func.sum(Sale.total_amount).desc()).all()
+    
+    # Buscar detalhes das vendas para cada cliente
+    result = []
+    for group in grouped_sales:
+        # Buscar vendas detalhadas para este cliente
+        sales_query = db.query(Sale).options(
+            joinedload(Sale.seller),
+            joinedload(Sale.items).joinedload(SaleItem.product)
+        ).filter(Sale.customer_id == group.id)
+        
+        # Aplicar mesmos filtros
+        if seller_id and current_user.role == "admin":
+            try:
+                seller_id_int = int(seller_id)
+                sales_query = sales_query.filter(Sale.seller_id == seller_id_int)
+            except ValueError:
+                pass
+        elif current_user.role != "admin":
+            # Vendedores só veem suas próprias vendas
+            sales_query = sales_query.filter(Sale.seller_id == current_user.id)
+        
+        if start_date:
+            sales_query = sales_query.filter(Sale.created_at >= start_date)
+        
+        if end_date:
+            sales_query = sales_query.filter(Sale.created_at <= end_date + " 23:59:59")
+        
+        if status:
+            sales_query = sales_query.filter(Sale.status == status)
+        
+        sales = sales_query.order_by(Sale.created_at.desc()).all()
+        
+        # Calcular estatísticas por status
+        status_stats = {}
+        for sale in sales:
+            status = sale.status
+            if status not in status_stats:
+                status_stats[status] = {"count": 0, "amount": 0}
+            status_stats[status]["count"] += 1
+            status_stats[status]["amount"] += sale.total_amount
+        
+        result.append({
+            "customer": {
+                "id": group.id,
+                "name": group.name,
+                "cpf": group.cpf
+            },
+            "summary": {
+                "sales_count": group.sales_count,
+                "total_amount": float(group.total_amount),
+                "avg_amount": float(group.avg_amount),
+                "status_stats": status_stats
+            },
+            "sales": [
+                {
+                    "id": sale.id,
+                    "total_amount": sale.total_amount,
+                    "payment_method": sale.payment_method,
+                    "status": sale.status,
+                    "created_at": sale.created_at,
+                    "seller": {
+                        "id": sale.seller.id,
+                        "name": sale.seller.name
+                    } if sale.seller else None,
+                    "items": [
+                        {
+                            "product_name": item.product.name,
+                            "quantity": item.quantity,
+                            "unit_price": item.unit_price,
+                            "total_price": item.total_price
+                        }
+                        for item in sale.items
+                    ]
+                }
+                for sale in sales
+            ]
+        })
+    
+    return result 
 
 @router.get("/{sale_id}", response_model=SaleSchema)
 async def get_sale(
@@ -83,12 +225,22 @@ async def create_sale(
         
         product.stock_quantity -= item.quantity
 
+    # Definir status da venda
+    sale_status = "completed"
+    paid_at = None
+    if sale.payment_method.lower() in ["fiado", "credito", "a prazo"]:
+        sale_status = "pending"
+    else:
+        paid_at = datetime.now()
+
     db_sale = Sale(
         seller_id=current_user.id,
         customer_id=sale.customer_id,
         payment_method=sale.payment_method,
         total_amount=total_amount,
-        items=sale_items_to_create
+        status=sale_status,
+        items=sale_items_to_create,
+        paid_at=paid_at
     )
     
     db.add(db_sale)
@@ -97,8 +249,11 @@ async def create_sale(
     
     # Se o pagamento for "fiado", criar uma conta a receber
     if sale.payment_method.lower() in ["fiado", "credito", "a prazo"]:
-        # Definir data de vencimento padrão (30 dias)
-        due_date = datetime.now() + timedelta(days=30)
+        # Usar data de vencimento fornecida ou padrão de 30 dias
+        if hasattr(sale, 'due_date') and sale.due_date:
+            due_date = datetime.fromisoformat(sale.due_date.replace('Z', '+00:00'))
+        else:
+            due_date = datetime.now() + timedelta(days=30)
         
         account_receivable = AccountReceivable(
             sale_id=db_sale.id,

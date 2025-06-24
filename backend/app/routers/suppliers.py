@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
@@ -17,9 +17,15 @@ router = APIRouter(
 async def get_suppliers(
     skip: int = 0,
     limit: int = 100,
+    name: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    suppliers = db.query(Supplier).filter(Supplier.is_active == True).offset(skip).limit(limit).all()
+    query = db.query(Supplier).filter(Supplier.is_active == True)
+    
+    if name:
+        query = query.filter(Supplier.name.ilike(f"%{name}%"))
+    
+    suppliers = query.offset(skip).limit(limit).all()
     return suppliers
 
 @router.get("/{supplier_id}", response_model=SupplierSchema)

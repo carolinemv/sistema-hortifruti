@@ -153,12 +153,15 @@ class SaleBase(BaseModel):
 
 class SaleCreate(SaleBase):
     items: List[SaleItemCreate]
+    due_date: Optional[str] = None  # Data de vencimento para vendas fiado
 
 class Sale(SaleBase):
     id: int
     seller_id: int
     total_amount: float
+    status: str
     created_at: datetime
+    paid_at: Optional[datetime] = None  # Data de quitação
     items: List[SaleItem] = []
     customer: Optional["Customer"] = None
     seller: "User"
@@ -313,6 +316,7 @@ class AccountReceivable(AccountReceivableBase):
     id: int
     paid_amount: float
     status: str
+    paid_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     sale: Optional["Sale"] = None
@@ -325,6 +329,7 @@ class AccountReceivableUpdate(BaseModel):
     paid_amount: Optional[float] = None
     due_date: Optional[datetime] = None
     status: Optional[str] = None
+    paid_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 # --- Payment Schemas ---

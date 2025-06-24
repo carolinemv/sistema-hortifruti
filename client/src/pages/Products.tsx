@@ -119,15 +119,16 @@ const Products: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 lg:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Produtos</h1>
           <p className="text-gray-600">Gerencie seus produtos e estoque</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 flex items-center"
+          className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 flex items-center justify-center w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
           Novo Produto
@@ -135,27 +136,27 @@ const Products: React.FC = () => {
       </div>
 
       {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         {products?.map((product) => (
-          <div key={product.id} className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
-                <Package className="h-8 w-8 text-primary-600 mr-3" />
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{product.name}</h3>
+          <div key={product.id} className="bg-white rounded-lg shadow-md p-4 lg:p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start flex-1 min-w-0">
+                <Package className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600 mr-3 mt-1 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base lg:text-lg font-semibold text-gray-900 truncate">{product.name}</h3>
                   <p className="text-sm text-gray-500">{product.category}</p>
                 </div>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 ml-2">
                 <button
                   onClick={() => openEditModal(product)}
-                  className="text-blue-600 hover:text-blue-800"
+                  className="text-blue-600 hover:text-blue-800 p-1"
                 >
                   <Edit className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => deleteProduct.mutate(product.id)}
-                  className="text-red-600 hover:text-red-800"
+                  className="text-red-600 hover:text-red-800 p-1"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -163,30 +164,42 @@ const Products: React.FC = () => {
             </div>
             
             <div className="space-y-2">
-              <p className="text-sm text-gray-600">{product.description}</p>
-              <div className="flex justify-between text-sm">
+              <p className="text-sm text-gray-600 break-words">{product.description}</p>
+              <div className="flex flex-col sm:flex-row sm:justify-between text-sm">
                 <span className="text-gray-500">Preço:</span>
                 <span className="font-medium">R$ {product.price.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between text-sm">
                 <span className="text-gray-500">Estoque:</span>
                 <span className={`font-medium ${product.stock_quantity <= product.min_stock ? 'text-red-600' : 'text-green-600'}`}>
                   {product.stock_quantity} {product.unit}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex flex-col sm:flex-row sm:justify-between text-sm">
                 <span className="text-gray-500">Fornecedor:</span>
-                <span className="font-medium">{product.supplier.name}</span>
+                <span className="font-medium truncate">{product.supplier.name}</span>
               </div>
             </div>
           </div>
         ))}
       </div>
 
+      {products?.length === 0 && (
+        <div className="text-center py-12">
+          <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Nenhum produto encontrado
+          </h3>
+          <p className="text-gray-500">
+            Os produtos cadastrados aparecerão aqui.
+          </p>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 lg:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">
               {editingProduct ? 'Editar Produto' : 'Novo Produto'}
             </h2>
@@ -208,13 +221,14 @@ const Products: React.FC = () => {
                 <textarea
                   name="description"
                   defaultValue={editingProduct?.description}
+                  rows={3}
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Preço</label>
+                  <label className="block text-sm font-medium text-gray-700">Preço de Venda</label>
                   <input
                     type="number"
                     step="0.01"
@@ -224,6 +238,7 @@ const Products: React.FC = () => {
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Preço de Custo</label>
                   <input
@@ -237,9 +252,9 @@ const Products: React.FC = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Estoque</label>
+                  <label className="block text-sm font-medium text-gray-700">Estoque Atual</label>
                   <input
                     type="number"
                     name="stock_quantity"
@@ -248,6 +263,7 @@ const Products: React.FC = () => {
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Estoque Mínimo</label>
                   <input
@@ -260,28 +276,24 @@ const Products: React.FC = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Unidade</label>
-                  <select
+                  <input
+                    type="text"
                     name="unit"
                     defaultValue={editingProduct?.unit}
                     required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  >
-                    <option value="kg">kg</option>
-                    <option value="unidade">unidade</option>
-                    <option value="g">g</option>
-                    <option value="l">l</option>
-                  </select>
+                  />
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Categoria</label>
                   <input
                     type="text"
                     name="category"
                     defaultValue={editingProduct?.category}
-                    required
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
                   />
                 </div>
@@ -304,17 +316,17 @@ const Products: React.FC = () => {
                 </select>
               </div>
               
-              <div className="flex justify-end space-x-3 pt-4">
+              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 w-full sm:w-auto"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 w-full sm:w-auto"
                 >
                   {editingProduct ? 'Atualizar' : 'Criar'}
                 </button>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { api } from '../services/api';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, Calendar } from 'lucide-react';
 
 interface Product {
   id: number;
@@ -27,6 +27,7 @@ const PDV: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState('dinheiro');
+  const [dueDate, setDueDate] = useState('');
   const queryClient = useQueryClient();
 
   const { data: products } = useQuery<Product[]>(
@@ -55,6 +56,7 @@ const PDV: React.FC = () => {
         queryClient.invalidateQueries('sales');
         setCart([]);
         setSelectedCustomer(null);
+        setDueDate('');
         alert('Venda realizada com sucesso!');
       },
     }
@@ -100,6 +102,11 @@ const PDV: React.FC = () => {
     }
   };
 
+  const handleQuantityChange = (productId: number, value: string) => {
+    const newQuantity = parseFloat(value) || 0;
+    updateQuantity(productId, newQuantity);
+  };
+
   const getTotal = () => {
     return cart.reduce((sum, item) => sum + item.total, 0);
   };
@@ -136,36 +143,40 @@ const PDV: React.FC = () => {
         quantity: item.quantity,
         unit_price: item.product.price,
         total_price: item.total
-      }))
+      })),
+      due_date: paymentMethod === 'fiado' && dueDate ? dueDate : null
     };
 
     createSale.mutate(saleData);
   };
 
+  // Definir data mínima como hoje
+  const today = new Date().toISOString().split('T')[0];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
       {/* Products Section */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className="lg:col-span-2 space-y-4 lg:space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">PDV - Ponto de Venda</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">PDV - Ponto de Venda</h1>
           <p className="text-gray-600">Selecione os produtos para a venda</p>
         </div>
 
         {/* Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
           {products?.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-lg shadow-md p-4 cursor-pointer hover:shadow-lg transition-shadow"
+              className="bg-white rounded-lg shadow-md p-3 lg:p-4 cursor-pointer hover:shadow-lg transition-shadow"
               onClick={() => addToCart(product)}
             >
               <div className="flex justify-between items-start mb-2">
-                <h3 className="font-semibold text-gray-900">{product.name}</h3>
-                <span className="text-lg font-bold text-primary-600">
+                <h3 className="font-semibold text-gray-900 text-sm lg:text-base">{product.name}</h3>
+                <span className="text-base lg:text-lg font-bold text-primary-600">
                   R$ {product.price.toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between items-center text-sm text-gray-500">
+              <div className="flex justify-between items-center text-xs lg:text-sm text-gray-500">
                 <span>Estoque: {product.stock_quantity} {product.unit}</span>
                 <span className="text-xs bg-gray-100 px-2 py-1 rounded">
                   Clique para adicionar
@@ -177,11 +188,11 @@ const PDV: React.FC = () => {
       </div>
 
       {/* Cart Section */}
-      <div className="space-y-6">
-        <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="space-y-4 lg:space-y-6">
+        <div className="bg-white rounded-lg shadow-md p-4 lg:p-6">
           <div className="flex items-center mb-4">
-            <ShoppingCart className="h-6 w-6 text-primary-600 mr-2" />
-            <h2 className="text-xl font-bold text-gray-900">Carrinho</h2>
+            <ShoppingCart className="h-5 w-5 lg:h-6 lg:w-6 text-primary-600 mr-2" />
+            <h2 className="text-lg lg:text-xl font-bold text-gray-900">Carrinho</h2>
           </div>
 
           {/* Customer Selection */}
@@ -192,7 +203,7 @@ const PDV: React.FC = () => {
             <select
               value={selectedCustomer?.id || ''}
               onChange={(e) => handleCustomerChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             >
               <option value="">Selecione um cliente</option>
               {customers?.map((customer) => (
@@ -204,39 +215,47 @@ const PDV: React.FC = () => {
           </div>
 
           {/* Cart Items */}
-          <div className="space-y-3 mb-4">
+          <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
             {cart.map((item) => (
               <div key={item.product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{item.product.name}</h4>
-                  <p className="text-sm text-gray-500">
-                    R$ {item.product.price.toFixed(2)} x {item.quantity}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-900 text-sm truncate">{item.product.name}</h4>
+                  <p className="text-xs text-gray-500">
+                    R$ {item.product.price.toFixed(2)} x {item.quantity} {item.product.unit}
                   </p>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 lg:space-x-2 ml-2">
                   <button
                     onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                     className="p-1 text-gray-500 hover:text-gray-700"
                   >
-                    <Minus className="h-4 w-4" />
+                    <Minus className="h-3 w-3 lg:h-4 lg:w-4" />
                   </button>
-                  <span className="font-medium">{item.quantity}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max={item.product.stock_quantity}
+                    value={item.quantity}
+                    onChange={(e) => handleQuantityChange(item.product.id, e.target.value)}
+                    className="w-12 lg:w-16 text-center border border-gray-300 rounded px-1 lg:px-2 py-1 text-xs lg:text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <button
                     onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
                     className="p-1 text-gray-500 hover:text-gray-700"
                     disabled={item.quantity >= item.product.stock_quantity}
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3 w-3 lg:h-4 lg:w-4" />
                   </button>
                   <button
                     onClick={() => removeFromCart(item.product.id)}
                     className="p-1 text-red-500 hover:text-red-700"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3 w-3 lg:h-4 lg:w-4" />
                   </button>
                 </div>
-                <div className="text-right">
-                  <span className="font-bold">R$ {item.total.toFixed(2)}</span>
+                <div className="text-right ml-2">
+                  <span className="font-bold text-sm lg:text-base">R$ {item.total.toFixed(2)}</span>
                 </div>
               </div>
             ))}
@@ -250,7 +269,7 @@ const PDV: React.FC = () => {
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
             >
               <option value="dinheiro">Dinheiro</option>
               <option value="cartao_credito">Cartão de Crédito</option>
@@ -260,9 +279,32 @@ const PDV: React.FC = () => {
             </select>
           </div>
 
+          {/* Due Date for Credit Sales */}
+          {paymentMethod === 'fiado' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Data de Vencimento (opcional)
+              </label>
+              <div className="flex items-center space-x-2">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  min={today}
+                  className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="Selecione a data de vencimento"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Se não informado, será definido como 30 dias a partir de hoje
+              </p>
+            </div>
+          )}
+
           {/* Total */}
           <div className="border-t pt-4">
-            <div className="flex justify-between items-center text-lg font-bold">
+            <div className="flex justify-between items-center text-base lg:text-lg font-bold">
               <span>Total:</span>
               <span className="text-primary-600">R$ {getTotal().toFixed(2)}</span>
             </div>
@@ -272,9 +314,9 @@ const PDV: React.FC = () => {
           <button
             onClick={handleCheckout}
             disabled={!selectedCustomer || cart.length === 0 || createSale.isLoading}
-            className="w-full flex items-center justify-center bg-primary-600 text-white font-bold py-3 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center bg-primary-600 text-white font-bold py-3 rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed mt-4"
           >
-            <CreditCard className="h-5 w-5 mr-2" />
+            <CreditCard className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
             {createSale.isLoading ? 'Finalizando...' : 'Finalizar Venda'}
           </button>
         </div>

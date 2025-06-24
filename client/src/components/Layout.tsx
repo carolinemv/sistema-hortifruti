@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -11,12 +11,15 @@ import {
   LogOut,
   BarChart,
   DollarSign,
-  Warehouse
+  Warehouse,
+  Menu,
+  X
 } from 'lucide-react';
 
 const Layout: React.FC = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const allNavigation = [
     { name: 'Dashboard', href: '/', icon: Home, adminOnly: true },
@@ -40,13 +43,25 @@ const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Mobile menu button */}
+      <div className="lg:hidden fixed top-4 left-4 z-50">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 bg-white rounded-md shadow-md text-gray-600 hover:text-gray-900"
+        >
+          {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </button>
+      </div>
+
       {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg">
+      <div className={`fixed inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
         <div className="flex items-center justify-center h-16 bg-primary-600 text-white">
           <h1 className="text-xl font-bold">Hortifruti PDV</h1>
         </div>
         
-        <nav className="mt-8">
+        <nav className="mt-8 flex-1 overflow-y-auto">
           <div className="px-4 space-y-2">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -54,6 +69,7 @@ const Layout: React.FC = () => {
                 <Link
                   key={item.name}
                   to={item.href}
+                  onClick={() => setSidebarOpen(false)}
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     isActive
                       ? 'bg-primary-100 text-primary-700'
@@ -69,7 +85,7 @@ const Layout: React.FC = () => {
         </nav>
 
         {/* User info and logout */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
@@ -78,7 +94,7 @@ const Layout: React.FC = () => {
                 </span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-700">{user?.full_name}</p>
+                <p className="text-sm font-medium text-gray-700 truncate">{user?.full_name}</p>
                 <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
               </div>
             </div>
@@ -93,9 +109,17 @@ const Layout: React.FC = () => {
         </div>
       </div>
 
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black bg-opacity-50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Main content */}
-      <div className="ml-64">
-        <main className="p-8">
+      <div className="lg:ml-64">
+        <main className="p-4 lg:p-8 pt-16 lg:pt-8">
           <Outlet />
         </main>
       </div>

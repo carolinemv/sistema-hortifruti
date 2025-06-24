@@ -25,6 +25,8 @@ async def get_accounts_receivable(
     limit: int = 100,
     status: Optional[str] = None,
     customer_name: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -39,12 +41,55 @@ async def get_accounts_receivable(
     if customer_name:
         query = query.join(Customer).filter(Customer.name.ilike(f"%{customer_name}%"))
     
+    if start_date:
+        query = query.filter(AccountReceivable.due_date >= start_date)
+    
+    if end_date:
+        query = query.filter(AccountReceivable.due_date <= end_date + " 23:59:59")
+    
     if current_user.role != "admin":
         # Vendedores só veem contas de vendas que eles fizeram
         query = query.join(Sale).filter(Sale.seller_id == current_user.id)
     
     accounts = query.order_by(AccountReceivable.due_date.asc()).offset(skip).limit(limit).all()
-    return accounts
+    
+    # Buscar pagamentos para cada conta
+    result = []
+    for account in accounts:
+        payments = db.query(Payment).options(
+            joinedload(Payment.user)
+        ).filter(Payment.account_receivable_id == account.id).order_by(Payment.payment_date.asc()).all()
+        
+        account_dict = {
+            "id": account.id,
+            "sale_id": account.sale_id,
+            "customer_id": account.customer_id,
+            "amount": account.amount,
+            "paid_amount": account.paid_amount,
+            "due_date": account.due_date,
+            "status": account.status,
+            "paid_at": account.paid_at,
+            "notes": account.notes,
+            "created_at": account.created_at,
+            "updated_at": account.updated_at,
+            "sale": account.sale,
+            "customer": account.customer,
+            "payments": [
+                {
+                    "id": payment.id,
+                    "amount": payment.amount,
+                    "payment_method": payment.payment_method,
+                    "payment_date": payment.payment_date,
+                    "notes": payment.notes,
+                    "created_by": payment.created_by,
+                    "user": payment.user
+                }
+                for payment in payments
+            ]
+        }
+        result.append(account_dict)
+    
+    return result
 
 @router.get("/{account_id}", response_model=AccountReceivableSchema)
 async def get_account_receivable(
@@ -115,12 +160,18 @@ async def update_account_receivable(
     # Atualizar status baseado no valor pago
     if db_account.paid_amount >= db_account.amount:
         db_account.status = "paid"
+        db_account.paid_at = datetime.now()  # Definir data de quitação
+        
+        # Atualizar também a data de quitação da venda
+        if db_account.sale_id:
+            sale = db.query(Sale).filter(Sale.id == db_account.sale_id).first()
+            if sale:
+                sale.paid_at = datetime.now()
+                sale.status = "completed"
     elif db_account.paid_amount > 0:
         db_account.status = "partial"
     elif db_account.due_date < datetime.now():
         db_account.status = "overdue"
-    else:
-        db_account.status = "pending"
     
     db.commit()
     db.refresh(db_account)
@@ -156,6 +207,14 @@ async def create_payment(
     # Atualizar status da conta
     if account.paid_amount >= account.amount:
         account.status = "paid"
+        account.paid_at = datetime.now()  # Definir data de quitação
+        
+        # Atualizar também a data de quitação da venda
+        if account.sale_id:
+            sale = db.query(Sale).filter(Sale.id == account.sale_id).first()
+            if sale:
+                sale.paid_at = datetime.now()
+                sale.status = "completed"
     else:
         account.status = "partial"
     
@@ -210,5 +269,141 @@ async def get_overdue_summary(
                 "due_date": account.due_date
             }
             for account in overdue_accounts
+        ]
+    }
+
+@router.post("/customer/{customer_id}/payments", response_model=PaymentSchema, status_code=201)
+async def create_customer_payment(
+    customer_id: int,
+    payment: PaymentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Criar pagamento avulso para um cliente (sistema FIFO)"""
+    # Verificar se o cliente existe
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Buscar todas as contas a receber pendentes do cliente (FIFO - mais antigas primeiro)
+    pending_accounts = db.query(AccountReceivable).filter(
+        AccountReceivable.customer_id == customer_id,
+        AccountReceivable.status.in_(["pending", "partial", "overdue"])
+    ).order_by(AccountReceivable.due_date.asc()).all()
+    
+    if not pending_accounts:
+        raise HTTPException(status_code=400, detail="Customer has no pending accounts receivable")
+    
+    # Calcular total devido
+    total_due = sum(account.amount - account.paid_amount for account in pending_accounts)
+    if payment.amount > total_due:
+        raise HTTPException(status_code=400, detail=f"Payment amount exceeds total due (R$ {total_due:.2f})")
+    
+    # Aplicar pagamento usando FIFO
+    remaining_payment = payment.amount
+    payments_created = []
+    
+    for account in pending_accounts:
+        if remaining_payment <= 0:
+            break
+            
+        account_remaining = account.amount - account.paid_amount
+        payment_amount = min(remaining_payment, account_remaining)
+        
+        # Criar pagamento para esta conta
+        db_payment = Payment(
+            amount=payment_amount,
+            payment_method=payment.payment_method,
+            payment_date=datetime.now(),
+            notes=payment.notes or f"Pagamento avulso - {payment_amount:.2f} aplicado",
+            account_receivable_id=account.id,
+            created_by=current_user.id
+        )
+        db.add(db_payment)
+        payments_created.append(db_payment)
+        
+        # Atualizar conta a receber
+        account.paid_amount += payment_amount
+        
+        # Atualizar status da conta
+        if account.paid_amount >= account.amount:
+            account.status = "paid"
+            account.paid_at = datetime.now()  # Definir data de quitação
+            
+            # Atualizar também a data de quitação da venda
+            if account.sale_id:
+                sale = db.query(Sale).filter(Sale.id == account.sale_id).first()
+                if sale:
+                    sale.paid_at = datetime.now()
+                    sale.status = "completed"
+        else:
+            account.status = "partial"
+        
+        remaining_payment -= payment_amount
+    
+    db.commit()
+    
+    # Retornar o primeiro pagamento criado (representativo)
+    return payments_created[0] if payments_created else None
+
+@router.get("/customer/{customer_id}/summary")
+async def get_customer_summary(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Retorna resumo das contas a receber de um cliente específico"""
+    # Verificar se o cliente existe
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    # Buscar todas as contas a receber do cliente
+    accounts = db.query(AccountReceivable).options(
+        joinedload(AccountReceivable.sale)
+    ).filter(AccountReceivable.customer_id == customer_id).order_by(AccountReceivable.due_date.asc()).all()
+    
+    # Calcular totais
+    total_amount = sum(account.amount for account in accounts)
+    total_paid = sum(account.paid_amount for account in accounts)
+    total_remaining = total_amount - total_paid
+    
+    # Contar por status
+    status_counts = {}
+    for account in accounts:
+        status = account.status
+        status_counts[status] = status_counts.get(status, 0) + 1
+    
+    return {
+        "customer": {
+            "id": customer.id,
+            "name": customer.name,
+            "cpf": customer.cpf
+        },
+        "summary": {
+            "total_amount": total_amount,
+            "total_paid": total_paid,
+            "total_remaining": total_remaining,
+            "accounts_count": len(accounts),
+            "status_counts": status_counts
+        },
+        "accounts": [
+            {
+                "id": account.id,
+                "sale_id": account.sale_id,
+                "amount": account.amount,
+                "paid_amount": account.paid_amount,
+                "remaining": account.amount - account.paid_amount,
+                "status": account.status,
+                "due_date": account.due_date,
+                "created_at": account.created_at,
+                "sale": {
+                    "id": account.sale.id,
+                    "total_amount": account.sale.total_amount,
+                    "payment_method": account.sale.payment_method,
+                    "created_at": account.sale.created_at
+                } if account.sale else None
+            }
+            for account in accounts
         ]
     } 
